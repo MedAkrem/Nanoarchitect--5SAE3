@@ -1,21 +1,25 @@
 package tn.esprit.User.AppRestControllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import tn.esprit.User.AppResouces.Exceptions.*;
-import tn.esprit.User.AppResouces.Models.DTOs.*;
-import tn.esprit.User.AppResouces.Models.Entities.User;
-import tn.esprit.User.AppResouces.Services.*;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import tn.esprit.User.AppResouces.Exceptions.PasswordException;
+import tn.esprit.User.AppResouces.Exceptions.PermissionException;
+import tn.esprit.User.AppResouces.Exceptions.UserException;
+import tn.esprit.User.AppResouces.Models.DTOs.ProfileDto;
+import tn.esprit.User.AppResouces.Models.DTOs.SoldeDto;
+import tn.esprit.User.AppResouces.Models.DTOs.UpdatePasswordDto;
+import tn.esprit.User.AppResouces.Models.DTOs.UserDto;
+import tn.esprit.User.AppResouces.Models.Entities.User;
+import tn.esprit.User.AppResouces.Services.DepartmentClient;
+import tn.esprit.User.AppResouces.Services.SoldeServiceImpl;
+import tn.esprit.User.AppResouces.Services.UserServiceImpl;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -25,7 +29,7 @@ public class UserController {
     @Autowired
     private UserServiceImpl userService;
     @Autowired
-    private DepartementServiceImpl departementService;
+    private DepartmentClient departmentClient;
 
     /*
     @Autowired

@@ -1,6 +1,7 @@
 package tn.esprit.User.AppResouces.Services;
 
 import tn.esprit.User.AppResouces.Exceptions.*;
+import tn.esprit.User.AppResouces.Models.DTOs.DepartmentDto;
 import tn.esprit.User.AppResouces.Models.DTOs.ProfileDto;
 import tn.esprit.User.AppResouces.Models.DTOs.UpdatePasswordDto;
 import tn.esprit.User.AppResouces.Models.DTOs.UserDto;
@@ -30,7 +31,7 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private UserRepository userRepository;
     @Autowired
-    private DepartementRepository departementRepository;
+    private DepartmentClient departmentClient;
     @Autowired
     private AttachmentRepository attachmentRepository;
     @Autowired
@@ -121,18 +122,22 @@ public class UserServiceImpl implements UserService {
         User currentUser = getCurrentUser();
         List<User> users = userRepository.findAll();
 
-        if(users.isEmpty()) {
+        if (users.isEmpty()) {
             throw new UserException("No Users Found");
-        }else {
-
+        } else {
             List<UserDto> dtoList = new ArrayList<>();
 
-            for(User user : users) {
-                if (currentUser.getDepartement() == user.getDepartement()){
+            for (User user : users) {
+                // Check if the user's department ID matches the current user's department ID
+                if (Objects.equals(currentUser.getDepartementId(), user.getDepartementId())) {
                     UserDto userDto = modelMapper.map(user, UserDto.class);
 
-                    userDto.setDepartementId(user.getDepartement().getId());
-                    userDto.setDepartementName(user.getDepartement().getName());
+                    // Fetch department details using the DepartmentClient Feign client
+                    if (user.getDepartementId() != null) {
+                        DepartmentDto departmentDto = departmentClient.getDepartmentById(user.getDepartementId());
+                        userDto.setDepartementId(departmentDto.getId());
+                        userDto.setDepartementName(departmentDto.getName());
+                    }
 
                     dtoList.add(userDto);
                 }
@@ -141,6 +146,7 @@ public class UserServiceImpl implements UserService {
             return dtoList;
         }
     }
+
 
 
     // Admin features :
@@ -162,120 +168,161 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserDto getUserById(Long userId) throws UserException {
+        // Retrieve the user entity by ID
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException("User does not exist with this id..."));
 
+        // Map the User entity to UserDto
         UserDto userDto = modelMapper.map(user, UserDto.class);
 
-        userDto.setDepartementId(user.getDepartement().getId());
-        userDto.setDepartementName(user.getDepartement().getName());
+        // Use Feign client to get department details if the department ID is present
+        if (user.getDepartementId() != null) {
+            DepartmentDto departmentDto = departmentClient.getDepartmentById(user.getDepartementId());
+            userDto.setDepartementId(departmentDto.getId());
+            userDto.setDepartementName(departmentDto.getName());
+        }
 
         return userDto;
     }
 
+
     @Override
     public UserDto addUser(UserDto user) throws UserException, DepartementException {
-        Departement departement = departementRepository.findById(user.getDepartementId())
-                .orElseThrow(() -> new DepartementException("No department found with this Id"));
-        if(userRepository.existsByCin(user.getCin())){
-            throw new UserException("Cin already exists");
+        // Use Feign client to verify if the department exists
+        DepartmentDto department = departmentClient.getDepartmentById(user.getDepartementId());
+        if (department == null) {
+            throw new DepartementException("No department found with this Id");
+        }
+
+        // Check for existing CIN and telephone in the User repository
+        if (userRepository.existsByCin(user.getCin())) {
+            throw new UserException("CIN already exists");
         } else if (userRepository.existsByTelephone(user.getTelephone())) {
             throw new UserException("Telephone already exists");
         } else {
+            // Map UserDto data to User entity and set department ID
             User newUser = new User();
             newUser.setCin(user.getCin());
             newUser.setUsername(user.getCin());
-            newUser.setPassword(pwd.encode(user.getCin()+"$mart"));
+            newUser.setPassword(pwd.encode(user.getCin() + "$mart"));
             newUser.setNomComplet(user.getNomComplet());
             newUser.setQualification(user.getQualification());
             newUser.setTelephone(user.getTelephone());
             newUser.setDob(user.getDob());
             newUser.setDoj(user.getDoj());
-
             newUser.setSexe(user.getSexe());
             newUser.setRole(Role.USER);
             newUser.setEnabled(Boolean.TRUE);
             newUser.setIndependant(Boolean.FALSE);
             newUser.setDateCreation(LocalDateTime.now());
 
-            newUser.setDepartement(departement);
-            departement.getUsers().add(newUser);
+            // Set the department ID using the ID from the DepartmentDto fetched via Feign client
+            newUser.setDepartementId(department.getId());
 
-
+            // Save the new user in the repository
             User userObj = userRepository.save(newUser);
+
+            // Add initial solde for the new user
             soldeService.addSolde(userObj.getId());
 
             return modelMapper.map(userObj, UserDto.class);
-
         }
     }
 
+
     @Override
-    public UserDto updateUser(Long userId, UserDto dto) throws PermissionException, UserException, DepartementException{
+    public UserDto updateUser(Long userId, UserDto dto) throws PermissionException, UserException, DepartementException {
         User currentUser = getCurrentUser();
         Role role = currentUser.getRole();
         User targetUser = userRepository.findById(userId).orElseThrow(() -> new UserException("User does not exist"));
         Role targetRole = targetUser.getRole();
-        if(((role != Role.DG) && (role != Role.RRH))){
+
+        // Check for permissions
+        if (((role != Role.DG) && (role != Role.RRH)) || (role == Role.RRH && targetRole == Role.DG)) {
             throw new PermissionException("You don't have permission");
-        }else{
-            if((role == Role.RRH) && (targetRole == Role.DG)) throw new PermissionException("You don't have permission");
-            Departement d = departementRepository.findById(dto.getDepartementId()).orElse(null);
-            if(!(targetUser.getCin().equals(dto.getCin())) && dto.getCin() != null) {
-                if(userRepository.existsByCin(dto.getCin())){
-                    throw new UserException("Cin already exists");
-                }
-                targetUser.setCin(dto.getCin());
-                targetUser.setUsername(dto.getCin());
+        }
+
+        // Update CIN if needed
+        if (dto.getCin() != null && !dto.getCin().equals(targetUser.getCin())) {
+            if (userRepository.existsByCin(dto.getCin())) {
+                throw new UserException("CIN already exists");
             }
-            if(targetUser.getNomComplet() != dto.getNomComplet() && dto.getNomComplet() != null){ targetUser.setNomComplet(dto.getNomComplet());}
-            if(targetUser.getQualification() != dto.getQualification() && dto.getQualification() != null){ targetUser.setQualification(dto.getQualification());}
-            if(!(targetUser.getTelephone().equals(dto.getTelephone())) && dto.getTelephone() != null){
-                if(userRepository.existsByTelephone(dto.getTelephone())){
-                    throw new UserException("Telephone already exists");
-                }
-                targetUser.setTelephone(dto.getTelephone());
+            targetUser.setCin(dto.getCin());
+            targetUser.setUsername(dto.getCin());
+        }
+
+        // Update department if a new department ID is provided
+        if (dto.getDepartementId() != null && !dto.getDepartementId().equals(targetUser.getDepartementId())) {
+            // Verify the department using the DepartmentClient
+            DepartmentDto department = departmentClient.getDepartmentById(dto.getDepartementId());
+            if (department == null) {
+                throw new DepartementException("Department does not exist");
             }
 
-            if(targetUser.getDob() != dto.getDob() && dto.getDob() != null){ targetUser.setDob(dto.getDob());}
-            if(targetUser.getDoj() != dto.getDoj() && dto.getDoj() != null){ targetUser.setDoj(dto.getDoj());}
-            if(targetUser.getSexe() != dto.getSexe() && dto.getSexe() != null){ targetUser.setSexe(dto.getSexe());}
-            if(targetUser.getDepartement() != d && d != null){
-                if (targetUser.getRole() == Role.DG || targetUser.getRole() == Role.RRH || targetUser.getRole() == Role.CD){
-                    throw new UserException("You must change Department Chef First");
-                }else {
-                    targetUser.setDepartement(d);
-                    d.getUsers().add(targetUser);
-                }
+            // Additional role check to ensure department change rules
+            if (targetUser.getRole() == Role.DG || targetUser.getRole() == Role.RRH || targetUser.getRole() == Role.CD) {
+                throw new UserException("You must change Department Chef First");
             }
-            if (targetUser.isIndependant() != dto.isIndependant()) { targetUser.setIndependant(dto.isIndependant()); }
-            if ((targetUser.getRole() == Role.DG || targetUser.getRole() == Role.RRH) && targetUser.isEnabled() != dto.isEnabled()) {
-                throw new UserException("This User can't be disabled !");
-            }
-            if(targetUser.isEnabled() != dto.isEnabled()){
-                targetUser.setEnabled(dto.isEnabled());
-            }
-            User newUser = userRepository.save(targetUser);
-            return modelMapper.map(newUser, UserDto.class);
+
+            // Update department ID in the user
+            targetUser.setDepartementId(department.getId());
         }
+
+        // Update other fields if they differ
+        if (dto.getNomComplet() != null && !dto.getNomComplet().equals(targetUser.getNomComplet())) {
+            targetUser.setNomComplet(dto.getNomComplet());
+        }
+        if (dto.getQualification() != null && !dto.getQualification().equals(targetUser.getQualification())) {
+            targetUser.setQualification(dto.getQualification());
+        }
+        if (dto.getTelephone() != null && !dto.getTelephone().equals(targetUser.getTelephone())) {
+            if (userRepository.existsByTelephone(dto.getTelephone())) {
+                throw new UserException("Telephone already exists");
+            }
+            targetUser.setTelephone(dto.getTelephone());
+        }
+        if (dto.getDob() != null && !dto.getDob().equals(targetUser.getDob())) {
+            targetUser.setDob(dto.getDob());
+        }
+        if (dto.getDoj() != null && !dto.getDoj().equals(targetUser.getDoj())) {
+            targetUser.setDoj(dto.getDoj());
+        }
+        if (dto.getSexe() != null && !dto.getSexe().equals(targetUser.getSexe())) {
+            targetUser.setSexe(dto.getSexe());
+        }
+        if (dto.isIndependant() != targetUser.isIndependant()) {
+            targetUser.setIndependant(dto.isIndependant());
+        }
+        if (dto.isEnabled() != targetUser.isEnabled()) {
+            if ((targetUser.getRole() == Role.DG || targetUser.getRole() == Role.RRH) && !dto.isEnabled()) {
+                throw new UserException("This User can't be disabled!");
+            }
+            targetUser.setEnabled(dto.isEnabled());
+        }
+
+        // Save the updated user
+        User updatedUser = userRepository.save(targetUser);
+        return modelMapper.map(updatedUser, UserDto.class);
     }
 
     @Override
     public List<UserDto> getAllUsers() throws UserException {
-
         List<User> users = userRepository.findAll();
 
-        if(users.isEmpty()) {
+        if (users.isEmpty()) {
             throw new UserException("No Users Found");
-        }else {
-
+        } else {
             List<UserDto> dtoList = new ArrayList<>();
 
-            for(User user : users) {
+            for (User user : users) {
                 UserDto userDto = modelMapper.map(user, UserDto.class);
 
-                userDto.setDepartementId(user.getDepartement().getId());
-                userDto.setDepartementName(user.getDepartement().getName());
+                // Fetch department details using Feign client if department ID is not null
+                if (user.getDepartementId() != null) {
+                    DepartmentDto departmentDto = departmentClient.getDepartmentById(user.getDepartementId());
+                    userDto.setDepartementId(departmentDto.getId());
+                    userDto.setDepartementName(departmentDto.getName());
+                }
 
                 dtoList.add(userDto);
             }
@@ -285,81 +332,102 @@ public class UserServiceImpl implements UserService {
     }
 
 
+
     @Override
     public UserDto deleteUser(Long userId) throws UserException, PermissionException, IOException, DemandeException {
         User currentUser = getCurrentUser();
         Role role = currentUser.getRole();
         User targetUser = userRepository.findById(userId).orElseThrow(() -> new UserException("User does not exist"));
         Role targetRole = targetUser.getRole();
-        if((targetRole == Role.DG) || (targetRole == Role.RRH)){
+
+        // Check if the user's role allows deletion
+        if ((targetRole == Role.DG) || (targetRole == Role.RRH)) {
             throw new PermissionException("This User can't be Deleted");
-        }else{
-            if(targetRole == Role.CD) {
-                Departement d = departementRepository.findById(targetUser.getDepartement().getId()).orElseThrow(() -> new UserException("Department does not exist"));
-                d.setChefDepartement(null);
-                departementRepository.save(d);
+        } else {
+            // If the target user is a department head, remove them from that position
+            if (targetRole == Role.CD && targetUser.getDepartementId() != null) {
+                DepartmentDto department = departmentClient.getDepartmentById(targetUser.getDepartementId());
+                if (department == null) {
+                    throw new UserException("Department does not exist");
+                }
+                // Update the department to remove the current user as the chef
+                department.setChefId(null);
+                departmentClient.updateDepartment(department.getId(), department);  // Assuming `updateDepartment` is an endpoint in `DepartmentClient`
             }
-            if (Objects.nonNull(targetUser.getImgPath())){
+
+            // Delete user's image file if exists
+            if (Objects.nonNull(targetUser.getImgPath())) {
                 FileUploadUtil.deleteFile(targetUser.getImgPath());
             }
 
 
-            // Delete notifications where the user is in vuePar
+            /*
+            // Remove all related notifications
             List<Notification> notificationsWithUserInViewPar = notificationRepository.findByVueParContaining(targetUser);
             for (Notification notification : notificationsWithUserInViewPar) {
                 notification.getVuePar().remove(targetUser);
                 notificationRepository.save(notification);
             }
 
-            // Delete notifications where the user is in destination
+
+
             List<Notification> notificationsWithUserInDestination = notificationRepository.findByDestinationContaining(targetUser);
             for (Notification notification : notificationsWithUserInDestination) {
                 notification.getDestination().remove(targetUser);
-                if (notification.getDestination().size() > 0){
+                if (notification.getDestination().size() > 0) {
                     notificationRepository.save(notification);
-                }else {
+                } else {
                     notificationRepository.delete(notification);
                 }
             }
 
-            // Delete notifications where the user is the origine
             List<Notification> notificationsWithUserAsOrigine = notificationRepository.findByOrigine(targetUser);
             for (Notification notification : notificationsWithUserAsOrigine) {
                 notificationRepository.delete(notification);
             }
 
+             */
+
+            /*
+
+            // Remove all associated tokens
             List<Token> tokens = tokenRepository.findAllTheTokensByUser(targetUser.getId());
             for (Token token : tokens) {
                 tokenRepository.delete(token);
             }
 
+            // Remove all associated requests (demandes) and attachments
             List<Demande> dems = demandeRepository.findAllDemandesByUser(targetUser.getId());
             for (Demande dem : dems) {
-                if (Objects.nonNull(dem.getAttachments())){
-                    if (dem.getAttachments().size() > 0){
-                        for (Attachment x : dem.getAttachments()){
-                            FileUploadUtil.deleteFile(x.getPath());
-                            attachmentRepository.delete(x);
-                        }
+                if (Objects.nonNull(dem.getAttachments())) {
+                    for (Attachment x : dem.getAttachments()) {
+                        FileUploadUtil.deleteFile(x.getPath());
+                        attachmentRepository.delete(x);
                     }
                 }
                 demandeRepository.delete(dem);
             }
+            */
 
+            // Delete user's solde
             soldeService.deleteSolde(targetUser.getId());
 
-
+            // Finally, delete the user
             userRepository.delete(targetUser);
         }
-        //////////////////////////////////////////////////////////////////////
 
+        // Map deleted user data to UserDto and fetch department details
         UserDto userDto = modelMapper.map(targetUser, UserDto.class);
 
-        userDto.setDepartementId(targetUser.getDepartement().getId());
-        userDto.setDepartementName(targetUser.getDepartement().getName());
+        if (targetUser.getDepartementId() != null) {
+            DepartmentDto department = departmentClient.getDepartmentById(targetUser.getDepartementId());
+            userDto.setDepartementId(department.getId());
+            userDto.setDepartementName(department.getName());
+        }
 
         return userDto;
     }
+
 
 
 }
