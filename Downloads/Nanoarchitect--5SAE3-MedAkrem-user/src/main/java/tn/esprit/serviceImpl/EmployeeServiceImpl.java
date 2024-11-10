@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 
 import tn.esprit.FeignClient.DepartmentClient;
 import tn.esprit.FeignClient.PointageClient;
-import tn.esprit.PointageDTO;
+import tn.esprit.DTO.PointageDTO;
 import tn.esprit.entities.DepartmentDto;
 import tn.esprit.entities.Employee;
 import tn.esprit.repository.EmployeeRepository;
