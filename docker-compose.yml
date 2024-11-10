@@ -1,0 +1,95 @@
+#version: '3.8'
+#
+#services:
+#  mongodb:
+#    image: mongo:latest
+#    container_name: mongodb
+#    ports:
+#      - "27017:27017"
+#    volumes:
+#      - mongo_data:/data/db  # Monture de volume pour persistance des données
+#    environment:
+#      MONGO_INITDB_ROOT_USERNAME: root
+#      MONGO_INITDB_ROOT_PASSWORD: example
+#
+#  pole-service:
+#    build:
+#      context: .  # Assurez-vous que le Dockerfile est dans le même dossier
+#    container_name: pole-service
+#    ports:
+#      - "8085:8084"
+#    environment:
+#      - spring.data.mongodb.host=mongodb  # MongoDB est accessible via ce nom de service
+#      - spring.data.mongodb.port=27017
+#      - eureka.client.service-url.default-zone=http://localhost:8761/eureka/
+#      - eureka.client.register-with-eureka=true
+#      - eureka.client.fetch-registry=true
+#      - eureka.instance.lease-renewal-interval-in-seconds=30
+#      - eureka.instance.lease-expiration-duration-in-seconds=90
+#    depends_on:
+#      - mongodb
+#
+#volumes:
+#  mongo_data:
+#    driver: local
+
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+  eureka:
+    image: ghadamejrii/eureka:latest
+    container_name: eureka
+    ports:
+      - "8761:8761"
+    environment:
+      - eureka.client.register-with-eureka=false
+      - eureka.client.fetch-registry=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+#  gateway:
+#    image: ghadamejrii/gateway:latest
+#    container_name: gateway
+#    ports:
+#      - "8093:8093"
+#    environment:
+#      - eureka.client.service-url.default-zone=http://eureka:8761/eureka/
+#    depends_on:
+#      - eureka
+
+  pole-service:
+    build:
+      context: .
+    container_name: pole-service
+    ports:
+      - "8080:8080"
+    environment:
+      - spring.data.mongodb.host=mongodb
+      - spring.data.mongodb.port=27017
+      - eureka.client.service-url.default-zone=http://eureka:8761/eureka/
+      - eureka.client.register-with-eureka=true
+      - eureka.client.fetch-registry=true
+      - eureka.instance.lease-renewal-interval-in-seconds=30
+      - eureka.instance.lease-expiration-duration-in-seconds=90
+    depends_on:
+      - mongodb
+      - eureka
+#      - gateway
+
+volumes:
+  mongo_data:
+    driver: local
