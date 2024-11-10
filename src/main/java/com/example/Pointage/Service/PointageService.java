@@ -41,4 +41,15 @@ public class PointageService {
     public List<Pointage> getAllPointage() {
         return pointageRepository.findAll();
     }
+
+
+
+    @Autowired
+    public PointageService(EmployeClient employeClient) {
+        this.employeClient = employeClient;
+    }
+
+    public EmployeDTO obtenirEmploye(Long employeId) {
+        return employeClient.getEmployeById(employeId);
+    }
 }

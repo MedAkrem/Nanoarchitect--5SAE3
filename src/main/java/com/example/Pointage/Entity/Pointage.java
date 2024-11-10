@@ -20,13 +20,15 @@ public class Pointage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+
     private LocalDateTime dateEntree;
 
-    @Column
+
     private LocalDateTime dateSortie;
 
-    @Column(nullable = false)
+    private String status;
+
+
     private Long employeId;
 
     // Méthode pour calculer la durée en minutes

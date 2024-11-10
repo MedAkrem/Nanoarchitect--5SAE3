@@ -15,8 +15,8 @@ public class PointageController {
     @Autowired
     private PointageService pointageService;
 
-    // Ajouter un pointage pour un employé
-    @PostMapping("/ajouter")
+
+    @PostMapping("/ajouter8")
     public ResponseEntity<Pointage> ajouterPointage(@RequestBody Pointage pointage) {
         Pointage nouveauPointage = pointageService.ajouter3Pointage(pointage);
         return ResponseEntity.ok(nouveauPointage);
