@@ -1,14 +1,13 @@
 package com.example.Pointage.Service;
 
-
-
-import com.example.Pointage.Entity.pointage;
+import com.example.Pointage.FeignClient.EmployeClient;
+import com.example.Pointage.Entity.Pointage;
 import com.example.Pointage.Repository.PointageRepository;
+import com.example.Pointage.DTO.EmployeDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class PointageService {
@@ -16,51 +15,30 @@ public class PointageService {
     @Autowired
     private PointageRepository pointageRepository;
 
-    // CRUD Basique
-    public pointage createPointage(pointage pointage) {
+    @Autowired
+    private EmployeClient employeClient;
+
+    public Pointage ajouter3Pointage(Pointage pointage) {
         return pointageRepository.save(pointage);
     }
+    public Pointage ajouterPointage(Long employeId, Pointage pointage) {
+        // Vérifie que l'employé existe en appelant le microservice Employe
+        EmployeDTO employe = employeClient.getEmployeById(employeId);
+        if (employe != null) {
+            pointage.setEmployeId(employeId); // Associe l'employé par son ID
+            return pointageRepository.save(pointage);
+        } else {
+            throw new RuntimeException("Employé avec ID " + employeId + " non trouvé");
+        }
+    }
 
-    public List<pointage> getAllPointages() {
+    public List<Pointage> getAllPointageParEmploye(Long employeId) {
+        EmployeDTO employe = employeClient.getEmployeById(employeId);
+        System.out.println("Informations de l'employé : " + employe.getNom());
+        return pointageRepository.findByEmployeId(employeId);
+    }
+
+    public List<Pointage> getAllPointage() {
         return pointageRepository.findAll();
     }
-
-    public Optional<pointage> getPointageById(Long id) {
-        return pointageRepository.findById(id);
-    }
-
-    public pointage updatePointage(Long id, pointage newPointage) {
-        return pointageRepository.findById(id)
-                .map(pointage -> {
-                    pointage.setNomEmploye(newPointage.getNomEmploye());
-                    pointage.setTotalCongeJours(newPointage.getTotalCongeJours());
-                    pointage.setPrisCongeJours(newPointage.getPrisCongeJours());
-                    pointage.setTotalSortieMin(newPointage.getTotalSortieMin());
-                    pointage.setPrisSortieMin(newPointage.getPrisSortieMin());
-                    pointage.setCompteurSortie(newPointage.getCompteurSortie());
-                    return pointageRepository.save(pointage);
-                }).orElseThrow(() -> new RuntimeException("Pointage not found with id " + id));
-    }
-
-    public void deletePointage(Long id) {
-        pointageRepository.deleteById(id);
-    }
-    public int calculateRemainingCongeDays(Long id) {
-        return pointageRepository.findById(id)
-                .map(pointage -> pointage.getTotalCongeJours() - pointage.getPrisCongeJours())
-                .orElseThrow(() -> new RuntimeException("Pointage not found with id " + id));
-    }
-
-    public int calculateRemainingSortieMinutes(Long id) {
-        return pointageRepository.findById(id)
-                .map(pointage -> pointage.getTotalSortieMin() - pointage.getPrisSortieMin())
-                .orElseThrow(() -> new RuntimeException("Pointage not found with id " + id));
-    }
-
-    public boolean isSortieLimitReached(Long id) {
-        return pointageRepository.findById(id)
-                .map(pointage -> pointage.getCompteurSortie() >= 5) // Exemple avec une limite de 5 sorties
-                .orElse(false);
-    }
-
 }
