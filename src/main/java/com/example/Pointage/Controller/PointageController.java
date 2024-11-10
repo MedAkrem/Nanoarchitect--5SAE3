@@ -16,11 +16,12 @@ public class PointageController {
     private PointageService pointageService;
 
     // Ajouter un pointage pour un employé
-   /* @PostMapping("/ajouter")
+    @PostMapping("/ajouter")
     public ResponseEntity<Pointage> ajouterPointage(@RequestBody Pointage pointage) {
-        Pointage nouveauPointage = pointageService.ajouterPointageemployeId(,pointage);
+        Pointage nouveauPointage = pointageService.ajouter3Pointage(pointage);
         return ResponseEntity.ok(nouveauPointage);
-    }*/
+    }
+
     @PostMapping("/ajouter/{employeId}")
     public ResponseEntity<Pointage> ajouterPointage(
             @PathVariable Long employeId,
