@@ -1,5 +1,8 @@
 package tn.esprit.serviceImpl;
 
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +32,17 @@ public class EmployeeServiceImpl implements IEmployeeService {
 
 	public void addEmployee(Employee employee) {
 		employeeRepository.save(employee);
+	}
+	// Calculer les heures travaillées sur une période pour un employé
+	private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+	// Calculer les heures travaillées pour un employé sur une période
+	public Duration getTotalHeuresTravaillées(Long employeId, LocalDate startDate, LocalDate endDate) {
+		String start = startDate.format(formatter);
+		String end = endDate.format(formatter);
+
+		// Appel Feign Client pour récupérer la durée totale depuis le service Pointage
+		return pointageClient.getTotalHeuresTravaillées(employeId, start, end);
 	}
 
 	public void updateEmployee(Employee employee) {

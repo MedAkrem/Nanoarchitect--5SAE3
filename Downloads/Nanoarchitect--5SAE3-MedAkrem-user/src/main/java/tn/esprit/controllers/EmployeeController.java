@@ -1,10 +1,13 @@
 package tn.esprit.controllers;
 
+import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -64,8 +67,24 @@ public class EmployeeController {
 		EmployeeService.addEmployee(employee);
 	}
 
+	@GetMapping("/{employeId}/totalHeures")
+	public ResponseEntity<Duration> getTotalHeuresTravaillées(
+			@PathVariable Long employeId,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
+		Duration totalHeures = EmployeeService.getTotalHeuresTravaillées(employeId, startDate, endDate);
+		return ResponseEntity.ok(totalHeures);
+	}
+	/*@GetMapping("/{employeId}/totalHeures")
+	public ResponseEntity<Duration> getTotalHeuresTravaillées(
+			@PathVariable Long employeId,
+			@RequestParam LocalDate startDate,
+			@RequestParam LocalDate endDate) {
 
+		Duration totalHeures = EmployeeService.getTotalHeuresTravaillées(employeId, startDate, endDate);
+		return ResponseEntity.ok(totalHeures);
+	}*/
 	@GetMapping("/{id}")
 	public Employee getEmployeById(@PathVariable Long id) {
 		// Cherche l'employé par son ID dans le repository
