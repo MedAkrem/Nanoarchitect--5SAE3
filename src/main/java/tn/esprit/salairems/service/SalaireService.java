@@ -2,7 +2,9 @@ package tn.esprit.salairems.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import tn.esprit.salairems.dto.EmployeeDto;
 import tn.esprit.salairems.entity.Salaire;
+import tn.esprit.salairems.feign.EmployeeClient;
 import tn.esprit.salairems.repository.SalaireRepository;
 
 import java.util.List;
@@ -14,13 +16,25 @@ public class SalaireService {
     @Autowired
     private SalaireRepository repository;
 
+    @Autowired
+    private EmployeeClient employeeClient;  // Inject EmployeeClient to call employee service
+
     public Salaire createSalary(Salaire salary) {
         // Ensure the salary object has a null ID to prevent accidental updates
         salary.setId(null);
+
+        // Use EmployeeClient to verify if the employee exists
+        EmployeeDto employee = employeeClient.getUserById(salary.getEmployeeId());
+
+        if (employee == null) {
+            throw new RuntimeException("Employee with ID " + salary.getEmployeeId() + " does not exist.");
+        }
+
         // Check if the salary already exists for the same employee
         if (repository.findByEmployeeId(salary.getEmployeeId()) != null) {
             throw new RuntimeException("Salary already exists for employee with ID " + salary.getEmployeeId());
         }
+
         // Initialize SalaryBeforeTax and SalaryAfterTax
         salary.initializeSalary();
         return repository.save(salary);
@@ -50,15 +64,24 @@ public class SalaireService {
 
 
     public Salaire getSalaryByEmployeeId(Long employeeId) {
+        //check if the employee exists
+        EmployeeDto employee = employeeClient.getUserById(employeeId);
+        if (employee == null) {
+            throw new RuntimeException("Employee with ID " + employeeId + " does not exist.");
+        }
+
         return repository.findByEmployeeId(employeeId);
     }
 
+
     public Double getSalaryBeforeTax(Long employeeId) {
+        //getSalaryByEmployeeId verifies employee existence
         Salaire salary = getSalaryByEmployeeId(employeeId);
         return salary != null ? salary.getTotalSalaryBeforeTax() : null;
     }
 
     public Double getSalaryAfterTax(Long employeeId) {
+        //getSalaryByEmployeeId verifies employee existence
         Salaire salary = getSalaryByEmployeeId(employeeId);
         return salary != null ? salary.getTotalSalaryAfterTax() : null;
     }
