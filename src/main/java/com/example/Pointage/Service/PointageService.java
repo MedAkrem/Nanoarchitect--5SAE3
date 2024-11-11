@@ -7,6 +7,8 @@ import com.example.Pointage.DTO.EmployeDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -31,6 +33,25 @@ public class PointageService {
             throw new RuntimeException("Employé avec ID " + employeId + " non trouvé");
         }
     }
+
+    public Duration getTotalHeuresParPeriode(Long employeId, LocalDate startDate, LocalDate endDate) {
+        List<Pointage> pointages = pointageRepository.findByEmployeIdAndDateEntreeBetween(
+                employeId,
+                startDate.atStartOfDay(),
+                endDate.atTime(23, 59)
+        );
+
+        return pointages.stream()
+                .map(Pointage::getDuree)
+                .reduce(Duration.ZERO, Duration::plus);
+    }
+   /* public Duration getTotalHeuresParPeriode(Long employeId, LocalDate startDate, LocalDate endDate) {
+        List<Pointage> pointages = pointageRepository.findByEmployeIdAndDateEntreeBetween(employeId, startDate.atStartOfDay(), endDate.atTime(23, 59));
+        return pointages.stream()
+                .map(Pointage::getDuree)
+                .reduce(Duration.ZERO, Duration::plus);
+    }
+*/
 
     public List<Pointage> getAllPointageParEmploye(Long employeId) {
         EmployeDTO employe = employeClient.getEmployeById(employeId);
